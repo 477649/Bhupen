@@ -2,7 +2,7 @@ name: Check NRB Monthly Statistics
 
 on:
   schedule:
-    - cron: "0 */6 * * *"   # Runs every 6 hours
+    - cron: "*/5 * * * *"   # Runs every 5 minutes
   workflow_dispatch:
 
 permissions:
