@@ -26,19 +26,31 @@ def get_latest_title():
 def send_email(subject: str, body: str):
     to_email = os.getenv("TO_EMAIL")
     from_email = os.getenv("FROM_EMAIL")
+    cc_email = os.getenv("CC_EMAIL")  # NEW: CC support
     app_password = os.getenv("APP_PASSWORD")
 
     if not (to_email and from_email and app_password):
         raise RuntimeError("Email environment variables are not set")
 
+    # Prepare the email message
     msg = MIMEText(body, "plain", "utf-8")
     msg["Subject"] = subject
     msg["From"] = from_email
     msg["To"] = to_email
 
+    # Build recipient list
+    recipients = [to_email]
+
+    # If CC_EMAIL exists, support multiple emails separated by commas
+    if cc_email:
+        cc_list = [email.strip() for email in cc_email.split(",") if email.strip()]
+        msg["Cc"] = ", ".join(cc_list)
+        recipients.extend(cc_list)
+
+    # Send email to all recipients
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(from_email, app_password)
-        server.send_message(msg)
+        server.sendmail(from_email, recipients, msg.as_string())
 
 
 def main():
@@ -55,7 +67,6 @@ def main():
 
     # ---------- ONLY SEND EMAIL WHEN NEW DATA IS FOUND ----------
     if latest != last_seen:
-        # New month found (or first run with empty last_seen)
         print("NEW MONTH DETECTED — Sending email and updating file.")
 
         subject = f"NRB Monthly Statistics Updated: {latest}"
@@ -66,13 +77,13 @@ def main():
             "You are receiving this notification because a new month was detected."
         )
 
-        # Send the notification email
+        # Send notification email
         send_email(subject, body)
 
-        # Update the tracking file so no duplicate emails for same month
+        # Update the tracking file
         LAST_SEEN_FILE.write_text(latest, encoding="utf-8")
+
     else:
-        # No change => NO EMAIL
         print("No change detected. No email sent.")
 
 
