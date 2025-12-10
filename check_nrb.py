@@ -8,6 +8,7 @@ from pathlib import Path
 URL = "https://www.nrb.org.np/category/monthly-statistics/?department=bfr"
 LAST_SEEN_FILE = Path("last_seen_month.txt")
 
+
 def get_latest_title():
     resp = requests.get(URL, timeout=30)
     resp.raise_for_status()
@@ -16,10 +17,11 @@ def get_latest_title():
     # Find first link whose text starts with Nepali year 20xx (e.g. 2082-06 etc.)
     for a in soup.find_all("a"):
         text = a.get_text(strip=True)
-        if text.startswith("208"):  
+        if text.startswith("208"):
             return text
 
     raise RuntimeError("Could not find any month link on the page.")
+
 
 def send_email(subject: str, body: str):
     to_email = os.getenv("TO_EMAIL")
@@ -38,28 +40,41 @@ def send_email(subject: str, body: str):
         server.login(from_email, app_password)
         server.send_message(msg)
 
+
 def main():
     latest = get_latest_title()
     print("Latest title on website:", latest)
 
+    # Read the last seen value from file (if exists)
     if LAST_SEEN_FILE.exists():
-        last_seen = LAST_SEEN_FILE.read_text(encoding='utf-8').strip()
+        last_seen = LAST_SEEN_FILE.read_text(encoding="utf-8").strip()
     else:
         last_seen = ""
 
     print("Last seen stored:", repr(last_seen))
 
+    # ---------- ONLY SEND EMAIL WHEN NEW DATA IS FOUND ----------
     if latest != last_seen:
-        print("NEW MONTH DETECTED — Sending Email!")
+        # New month found (or first run with empty last_seen)
+        print("NEW MONTH DETECTED — Sending email and updating file.")
+
         subject = f"NRB Monthly Statistics Updated: {latest}"
         body = (
-            f"A new Monthly Statistics file has been published:\n\n"
-            f"{latest}\n\nURL: {URL}"
+            "A new Monthly Statistics file has been published on NRB website.\n\n"
+            f"Latest entry: {latest}\n"
+            f"URL: {URL}\n\n"
+            "You are receiving this notification because a new month was detected."
         )
+
+        # Send the notification email
         send_email(subject, body)
-        LAST_SEEN_FILE.write_text(latest, encoding='utf-8')
+
+        # Update the tracking file so no duplicate emails for same month
+        LAST_SEEN_FILE.write_text(latest, encoding="utf-8")
     else:
-        print("No change detected.")
+        # No change => NO EMAIL
+        print("No change detected. No email sent.")
+
 
 if __name__ == "__main__":
     main()
