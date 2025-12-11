@@ -24,12 +24,13 @@ FILE_MACRO = Path("last_seen_macro.txt")
 URL_INDICATOR = "https://www.nrb.org.np/category/indicators/"
 FILE_INDICATOR = Path("last_seen_indicator.txt")
 
+
 # ------------------ COMMON FUNCTIONS -------------------
 
 def get_latest_title_from_url(url, prefix=None):
     """
     Returns the correct 'latest' item based on website structure:
-    - Macro: bottom-most month label (e.g. "Three Months (Mid-October/ Ashwin)")
+    - Macro: newest month label (bottom-most row)
     - Indicators: top-most link starting with "Payment Systems Indicators"
     - Default: first link starting with prefix (e.g. "208")
     """
@@ -37,23 +38,28 @@ def get_latest_title_from_url(url, prefix=None):
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    # ---------- MACRO LOGIC (newest month at bottom) ----------
+    # ---------- MACRO LOGIC (newest month always at bottom) ----------
     if "current-macroeconomic-situation" in url:
         month_titles = []
 
-        # Look through all tags and pick texts that look like month labels
-        for tag in soup.find_all(True):  # True = any tag
-            text = tag.get_text(strip=True)
-            # Very loose but robust pattern: contains "Month (" and "Mid"
-            if "Month (" in text and "Mid" in text:
+        # Rows like:
+        # "One Month (Mid-August / Shrawan)"
+        # "Two Months (Mid-September / Bhadra)"
+        # "Three Months (Mid-October/ Ashwin)"
+        # "Four Months (Mid-....)" etc.
+        for a in soup.find_all("a"):
+            text = a.get_text(strip=True)
+
+            # Very general pattern so it will work even if NRB adds more months:
+            # must contain the word "Month" or "Months" and also "Mid"
+            if "Month" in text and "Mid" in text:
                 month_titles.append(text)
 
         if month_titles:
-            # newest month is always shown last in that section
+            # newest is ALWAYS the last row on that page
             return month_titles[-1]
 
-        # If we reach here, we didn't find any month labels
-        raise RuntimeError("Macro month titles not found on page: " + url)
+        raise RuntimeError("Macro month rows not found on page: " + url)
 
     # ---------- PAYMENT INDICATORS (newest at top) ----------
     if "/category/indicators" in url:
@@ -89,7 +95,7 @@ def send_email(subject: str, body: str):
 
     recipients = [to_email]
 
-    # CC support
+    # CC support (comma-separated list)
     if cc_email:
         cc_list = [x.strip() for x in cc_email.split(",") if x.strip()]
         msg["Cc"] = ", ".join(cc_list)
@@ -127,7 +133,6 @@ def check_section(url, file_path, section_name, prefix=None):
 
         send_email(subject, body)
         file_path.write_text(latest, encoding="utf-8")
-
     else:
         print("No change detected.")
 
@@ -138,7 +143,7 @@ def main():
     # SECTION 1 – Monthly statistics (top item, starts with 208)
     check_section(URL_BFR, FILE_BFR, "Monthly Statistics (BFR)", prefix="208")
 
-    # SECTION 2 – Macro (latest month at bottom; handled in get_latest_title_from_url)
+    # SECTION 2 – Macro (latest month at bottom; handled inside get_latest_title_from_url)
     check_section(URL_MACRO, FILE_MACRO, "Macro-Economic & Financial Situation")
 
     # SECTION 3 – Payment indicators (top "Payment Systems Indicators..." item)
