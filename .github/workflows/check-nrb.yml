@@ -38,8 +38,8 @@ jobs:
           if [[ -n "$(git status --porcelain)" ]]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add last_seen_month.txt
-            git commit -m "Update last seen month"
+            git add last_seen_month.txt last_seen_macro.txt last_seen_indicator.txt
+            git commit -m "Update last seen files"
             git push
           else
             echo "No update needed."
