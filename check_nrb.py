@@ -46,12 +46,11 @@ def get_latest_title_from_url(url, prefix=None):
         # "One Month (Mid-August / Shrawan)"
         # "Two Months (Mid-September / Bhadra)"
         # "Three Months (Mid-October/ Ashwin)"
-        # "Four Months (Mid-....)" etc.
+        # "Four Months (Mid-.....)" etc.
         for a in soup.find_all("a"):
             text = a.get_text(strip=True)
 
-            # Very general pattern so it will work even if NRB adds more months:
-            # must contain the word "Month" or "Months" and also "Mid"
+            # General pattern: label must contain "Month" / "Months" and "Mid"
             if "Month" in text and "Mid" in text:
                 month_titles.append(text)
 
@@ -80,6 +79,12 @@ def get_latest_title_from_url(url, prefix=None):
 
 
 def send_email(subject: str, body: str):
+    """
+    Send email to:
+      - TO_EMAIL: one or more addresses (comma separated)
+      - CC_EMAIL: optional, one or more (comma separated)
+    using Gmail SMTP with APP_PASSWORD.
+    """
     to_email = os.getenv("TO_EMAIL")
     from_email = os.getenv("FROM_EMAIL")
     cc_email = os.getenv("CC_EMAIL")
@@ -88,18 +93,23 @@ def send_email(subject: str, body: str):
     if not (to_email and from_email and app_password):
         raise RuntimeError("Email environment variables missing")
 
+    # --- multiple TO addresses ---
+    to_list = [x.strip() for x in to_email.split(",") if x.strip()]
+
     msg = MIMEText(body, "plain", "utf-8")
     msg["Subject"] = subject
     msg["From"] = from_email
-    msg["To"] = to_email
+    msg["To"] = ", ".join(to_list)
 
-    recipients = [to_email]
+    # list of all recipients (TO + CC)
+    recipients = to_list[:]
 
-    # CC support (comma-separated list)
+    # --- multiple CC addresses (optional) ---
     if cc_email:
         cc_list = [x.strip() for x in cc_email.split(",") if x.strip()]
-        msg["Cc"] = ", ".join(cc_list)
-        recipients.extend(cc_list)
+        if cc_list:
+            msg["Cc"] = ", ".join(cc_list)
+            recipients.extend(cc_list)
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(from_email, app_password)
@@ -143,7 +153,7 @@ def main():
     # SECTION 1 – Monthly statistics (top item, starts with 208)
     check_section(URL_BFR, FILE_BFR, "Monthly Statistics (BFR)", prefix="208")
 
-    # SECTION 2 – Macro (latest month at bottom; handled inside get_latest_title_from_url)
+    # SECTION 2 – Macro (latest month at bottom; logic inside get_latest_title_from_url)
     check_section(URL_MACRO, FILE_MACRO, "Macro-Economic & Financial Situation")
 
     # SECTION 3 – Payment indicators (top "Payment Systems Indicators..." item)
