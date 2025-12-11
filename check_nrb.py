@@ -29,7 +29,7 @@ FILE_INDICATOR = Path("last_seen_indicator.txt")
 def get_latest_title_from_url(url, prefix=None):
     """
     Returns the correct 'latest' item based on website structure:
-    - Macro: bottom-most accordion header
+    - Macro: bottom-most month label (e.g. "Three Months (Mid-October/ Ashwin)")
     - Indicators: top-most link starting with "Payment Systems Indicators"
     - Default: first link starting with prefix (e.g. "208")
     """
@@ -37,12 +37,23 @@ def get_latest_title_from_url(url, prefix=None):
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    # ---------- MACRO LOGIC (newest at bottom) ----------
+    # ---------- MACRO LOGIC (newest month at bottom) ----------
     if "current-macroeconomic-situation" in url:
-        rows = soup.select("div.kt-accordion-item__header")
-        items = [r.get_text(strip=True) for r in rows if r.get_text(strip=True)]
-        if items:
-            return items[-1]  # bottom-most = newest
+        month_titles = []
+
+        # Look through all tags and pick texts that look like month labels
+        for tag in soup.find_all(True):  # True = any tag
+            text = tag.get_text(strip=True)
+            # Very loose but robust pattern: contains "Month (" and "Mid"
+            if "Month (" in text and "Mid" in text:
+                month_titles.append(text)
+
+        if month_titles:
+            # newest month is always shown last in that section
+            return month_titles[-1]
+
+        # If we reach here, we didn't find any month labels
+        raise RuntimeError("Macro month titles not found on page: " + url)
 
     # ---------- PAYMENT INDICATORS (newest at top) ----------
     if "/category/indicators" in url:
@@ -51,7 +62,7 @@ def get_latest_title_from_url(url, prefix=None):
             if text.startswith("Payment Systems Indicators"):
                 return text
 
-    # ---------- DEFAULT LOGIC (Monthly Stats) ----------
+    # ---------- DEFAULT LOGIC (Monthly Stats and others) ----------
     for a in soup.find_all("a"):
         text = a.get_text(strip=True)
         if prefix and text.startswith(prefix):
@@ -124,8 +135,13 @@ def check_section(url, file_path, section_name, prefix=None):
 # ------------------ MAIN -------------------
 
 def main():
+    # SECTION 1 – Monthly statistics (top item, starts with 208)
     check_section(URL_BFR, FILE_BFR, "Monthly Statistics (BFR)", prefix="208")
+
+    # SECTION 2 – Macro (latest month at bottom; handled in get_latest_title_from_url)
     check_section(URL_MACRO, FILE_MACRO, "Macro-Economic & Financial Situation")
+
+    # SECTION 3 – Payment indicators (top "Payment Systems Indicators..." item)
     check_section(URL_INDICATOR, FILE_INDICATOR, "Payment Systems Indicators")
 
 
